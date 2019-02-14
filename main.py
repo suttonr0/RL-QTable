@@ -4,7 +4,7 @@ import csv
 from notification import Notification
 
 # Create Environment
-env = gym.make('notifenv-v0')
+env = gym.make('notif-v0')
 
 action = "JUMP"
 new_state, reward, done, info = env.step(action)
@@ -12,7 +12,7 @@ print(reward)
 action = "JUMP"
 new_state, reward, done, info = env.step(action)
 print(reward)
-action = "CROUCH"
+action = "DUCK"
 new_state, reward, done, info = env.step(action)
 print(reward)
 
