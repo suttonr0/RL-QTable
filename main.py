@@ -31,14 +31,15 @@ print("MAIN: Action size ", action_size)
 state_size = env.observation_space
 print("MAIN: State size", state_size)
 
-# pd.Series(time_of_day_states).str.get_dummies(', ') is of type pandas.core.frame.DataFrame
-# Can be indexed by pd.Series(...)...["afternoon"], returning a
-# pandas.core.series.Series with its one-hot encoding. This encoding can then be indexed as a normal array
-
-for i in range(0, 81):
-    print("Notif Number" + str(i))
-    print(get_q_state_index(env.info, env.state))
-    env.step(False)
+# # Sample code for using get_q_state_index()
+# counter = np.zeros(81)
+# for i in range(0, 81):
+#     print("Notif Number" + str(i))
+#     print(get_q_state_index(env.info, env.state))
+#     counter[get_q_state_index(env.info, env.state)] += 1
+#     env.step(False)
+# print(counter)
+# print("OVERALL: " + str(counter.sum()))
 
 # Following Code is from https://github.com/simoninithomas/Deep_reinforcement_learning_Course/blob/master/Q%20learning/Taxi-v2/Q%20Learning%20with%20OpenAI%20Taxi-v2%20video%20version.ipynb
 
