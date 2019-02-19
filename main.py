@@ -6,23 +6,19 @@ import gym_notif  # Requires import even though IDE says it is unused
 from gym_notif.envs.mobile_notification import MobileNotification
 
 
-def get_q_state_index(oneHotList: list, notif: MobileNotification):
-    # Takes a list of one-hot encodings and a notification object and calculates the q-table index
-    qStateIndex = 0
-    for oneHotEncoding in oneHotList:  # For each category
-        for key in oneHotEncoding:  # For each key in that category's one hot encoding
-            if key == notif.appPackage:
-                test = oneHotEncoding[key].tolist()
-                print(test.index(1))
-                #len(one_hot_list[item])
-            if key == notif.category:
-                test = oneHotEncoding[key].tolist()
-                print(test.index(1))
-                #len(one_hot_list[item])
-            if key == notif.postedTimeOfDay:
-                test = oneHotEncoding[key].tolist()
-                print(test.index(1))
-                #len(one_hot_list[item])
+def get_q_state_index(possible_values: dict, notif: MobileNotification):
+    # inputs
+    # possible_values: dict values are a list of all possible values for their key category
+    # (e.g. possible_states["time_of_day_states"] = ["morn", "afternoon", "evening"]
+
+    # Q-State-Index is calculated of the combination of the indices of the three features in their possible value list
+    q_state_index = 0
+    q_state_index += possible_values["package_states"].index(notif.appPackage) * len(possible_values["category_states"]) * \
+        len(possible_values["time_of_day_states"])  # List of package states
+    q_state_index += possible_values["category_states"].index(notif.category) * len(possible_values["time_of_day_states"]) # List of package states
+    q_state_index += possible_values["time_of_day_states"].index(notif.postedTimeOfDay) # List of package states
+
+    return q_state_index
 
 
 # Create Environment
@@ -35,22 +31,14 @@ print("MAIN: Action size ", action_size)
 state_size = env.observation_space
 print("MAIN: State size", state_size)
 
-# Get One-Hot encodings for each category's values
-package_one_hot = pd.Series(env.info['package_states']).str.get_dummies(', ')
-category_one_hot = pd.Series(env.info['category_states']).str.get_dummies(', ')
-tod_one_hot = pd.Series(env.info['time_of_day_states']).str.get_dummies(', ')
-
-one_hot_list = []
-one_hot_list.append(package_one_hot)
-one_hot_list.append(category_one_hot)
-one_hot_list.append(tod_one_hot)
-
 # pd.Series(time_of_day_states).str.get_dummies(', ') is of type pandas.core.frame.DataFrame
 # Can be indexed by pd.Series(...)...["afternoon"], returning a
 # pandas.core.series.Series with its one-hot encoding. This encoding can then be indexed as a normal array
 
-get_q_state_index(one_hot_list, env.state)
-get_q_state_index(one_hot_list, MobileNotification(True, "com.instagram.android", "unknown", "morn"))
+for i in range(0, 81):
+    print("Notif Number" + str(i))
+    print(get_q_state_index(env.info, env.state))
+    env.step(False)
 
 # Following Code is from https://github.com/simoninithomas/Deep_reinforcement_learning_Course/blob/master/Q%20learning/Taxi-v2/Q%20Learning%20with%20OpenAI%20Taxi-v2%20video%20version.ipynb
 
