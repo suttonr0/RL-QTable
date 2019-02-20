@@ -31,47 +31,31 @@ print("MAIN: Action size ", action_size)
 state_size = env.observation_space.n
 print("MAIN: State size", state_size)
 
-# Sample code for using get_q_state_index()
-counter = np.zeros(81)
-for i in range(0, 628):
-    print("Notif Number" + str(i))
-    print(get_q_state_index(env.info, env.state))
-    counter[get_q_state_index(env.info, env.state)] += 1
-    env.step(False)
-print(counter)
-# print("OVERALL: " + str(counter.sum()))
-
-# Following Code is from https://github.com/simoninithomas/Deep_reinforcement_learning_Course/blob/master/Q%20learning/Taxi-v2/Q%20Learning%20with%20OpenAI%20Taxi-v2%20video%20version.ipynb
-
-# print(action_size.sample())
-
 # Create Q-Table
 qtable = np.zeros((state_size, action_size))
-print(qtable)
+# print(qtable)
 
 # Create the hyper parameters
-total_episodes = 3000  # Was 50000
+total_episodes = 100  # Was 50000
 total_test_episodes = 100
-max_steps = 99  # Max steps per episode
+max_steps = env.info['number_of_notifications']  # Max steps per episode. Should be the number of notifications under investigation for this episode
 
-learning_rate = 0.7
+learning_rate = 0.7  # Was 0.7
 gamma = 0.618  # Discount rate
 
 # Exploration parameters
 epsilon = 1.0  # Exploration rate
 max_epsilon = 1.0  # Exploration probability at the start
 min_epsilon = 0.01  # Min exploration probability
-decay_rate = 0.01  # Exponential decay rate for exploration
+decay_rate = 0.01  # Exponential decay rate for exploration, was 0.01
 
-# TODO: Fix Q-Learning Algorithm and Implementation
-
-# The Q-Learning Algorithm
+# ----- The Q-Learning Algorithm -----
 for episode in range(total_episodes):
     # Reset the environment
     state = env.reset()
-    step = 0
     done = False
-    print(episode)
+    print("Training Episode: {}".format(episode))
+    # Each step changes the state to a new notification
     for step in range(max_steps):
         # Choose an action a in the current world state (s)
         # First, randomize a number
@@ -84,6 +68,7 @@ for episode in range(total_episodes):
         # Else do a random choice --> exploration
         else:
             action = env.action_space.sample()
+            # print("SAMPLE ACTION: " + str(action))
 
         # Take the action (a) and observe the outcome state (s') and reward (r)
         new_state, reward, done, info = env.step(bool(action))
@@ -104,16 +89,14 @@ for episode in range(total_episodes):
     # Reduce epsilon (to reduce exploration over time)
     epsilon = min_epsilon + (max_epsilon - min_epsilon)*np.exp(-decay_rate*episode)
 
-print("OK")
-print(qtable)
+print(qtable.transpose())
 
-# Now after the Q-table is trained, it can be used for the application
+# ----- Using the Trained Q-Table -----
 env.reset()
 rewards = []
 
 for episode in range(total_test_episodes):
     state = env.reset()
-    step = 0
     done = False
     total_rewards = 0
     # print("****************************************************")
@@ -129,7 +112,7 @@ for episode in range(total_test_episodes):
 
         total_rewards += reward
         if done:
-            rewards.append(total_rewards)
+            rewards.append(total_rewards)  # Division by step can be added to get percentage
             print("Score", total_rewards)
             break
         state = new_state
