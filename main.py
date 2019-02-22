@@ -36,7 +36,7 @@ qtable = np.zeros((state_size, action_size))
 # print(qtable)
 
 # Create the hyper parameters
-total_episodes = 100  # Was 50000
+total_episodes = 1000  # Was 50000
 total_test_episodes = 100
 max_steps = env.info['number_of_notifications']  # Max steps per episode. Should be the number of notifications under investigation for this episode
 
@@ -50,11 +50,13 @@ min_epsilon = 0.01  # Min exploration probability
 decay_rate = 0.01  # Exponential decay rate for exploration, was 0.01
 
 # ----- The Q-Learning Algorithm -----
+print("Training...")
+
 for episode in range(total_episodes):
     # Reset the environment
     state = env.reset()
     done = False
-    print("Training Episode: {}".format(episode))
+    # print("Training Episode: {}".format(episode))
     # Each step changes the state to a new notification
     for step in range(max_steps):
         # Choose an action a in the current world state (s)
@@ -112,6 +114,8 @@ for episode in range(total_test_episodes):
 
         total_rewards += reward
         if done:
+            total_rewards = total_rewards/step
+            # Divide by total number of steps taken to get reward as a percentage
             rewards.append(total_rewards)  # Division by step can be added to get percentage
             print("Score", total_rewards)
             break
