@@ -29,7 +29,7 @@ def split(a, n):
 # TODO: implement some form of k cross validation ( have k = 10 )
 
 # Cross Validation k value
-k_value = 10
+K_VALUE = 10
 
 # Create Environment (ensure this is outside of the cross-validation loop, otherwise the dataset will be randomly
 # shuffled between k values
@@ -43,10 +43,10 @@ state_size = env.observation_space.n
 print("MAIN: State size", state_size)
 
 # Divide notification list into 10 equal parts
-k_parts_list = list(split(env.notification_list, k_value))
+k_parts_list = list(split(env.notification_list, K_VALUE))
 
 # For k in 10-fold cross validation
-for k_step in range(0, k_value):
+for k_step in range(0, K_VALUE):
     env.training_data = []
     env.testing_data = []
 
@@ -63,10 +63,10 @@ for k_step in range(0, k_value):
     # print(qtable)
 
     # Create the hyper parameters
-    total_training_episodes = 1000  # Was 50000
+    total_training_episodes = 100  # Was 50000, found 1000 to be good
     total_test_episodes = 100
-    max_training_steps = env.info['number_of_notifications']  # Number of notifications per training episode
-    max_testing_steps = env.info['number_of_notifications']  # Number of notifications per testing episode
+    max_training_steps = len(env.training_data)  # Number of notifications per training episode
+    max_testing_steps = len(env.testing_data)  # Number of notifications per testing episode
 
     learning_rate = 0.7  # Was 0.7
     gamma = 0.618  # Discount rate
@@ -76,6 +76,8 @@ for k_step in range(0, k_value):
     max_epsilon = 1.0  # Exploration probability at the start
     min_epsilon = 0.01  # Min exploration probability
     decay_rate = 0.01  # Exponential decay rate for exploration, was 0.01
+
+    env.training = True
 
     # ----- The Q-Learning Algorithm -----
     print("Training...")
@@ -121,10 +123,10 @@ for k_step in range(0, k_value):
     print(qtable)
 
     # ----- Using the Trained Q-Table -----
-    # env.training = True
+    env.training = False
+
     env.reset()
     rewards = []
-
 
     for episode in range(total_test_episodes):
         state = env.reset()
@@ -149,7 +151,7 @@ for k_step in range(0, k_value):
                 print("Score", total_rewards)
                 break
             state = new_state
-    print("Score over time: " + str(sum(rewards) / total_test_episodes))
+    print("Score over time: {} for k iteration {}".format(sum(rewards) / total_test_episodes, k_step))
 env.close()
 
 
