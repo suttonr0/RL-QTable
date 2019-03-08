@@ -17,7 +17,6 @@ def get_q_state_index(possible_values: dict, notif: MobileNotification):
         len(possible_values["time_of_day_states"])  # List of package states
     q_state_index += possible_values["category_states"].index(notif.category) * len(possible_values["time_of_day_states"])  # List of package states
     q_state_index += possible_values["time_of_day_states"].index(notif.postedTimeOfDay) # List of package states
-
     return q_state_index
 
 
@@ -30,6 +29,7 @@ def split(a, n):
 
 # Cross Validation k value
 K_VALUE = 10
+k_fold_average_reward = 0
 
 # Create Environment (ensure this is outside of the cross-validation loop, otherwise the dataset will be randomly
 # shuffled between k values
@@ -63,7 +63,7 @@ for k_step in range(0, K_VALUE):
     # print(qtable)
 
     # Create the hyper parameters
-    total_training_episodes = 100  # Was 50000, found 1000 to be good
+    total_training_episodes = 1000  # Was 50000, found 1000 to be good
     total_test_episodes = 100
     max_training_steps = len(env.training_data)  # Number of notifications per training episode
     max_testing_steps = len(env.testing_data)  # Number of notifications per testing episode
@@ -152,6 +152,7 @@ for k_step in range(0, K_VALUE):
                 break
             state = new_state
     print("Score over time: {} for k iteration {}".format(sum(rewards) / total_test_episodes, k_step))
+    k_fold_average_reward += (sum(rewards) / total_test_episodes)
 env.close()
-
+print("Final average reward across all {} validations: {}".format(K_VALUE, k_fold_average_reward/K_VALUE))
 
