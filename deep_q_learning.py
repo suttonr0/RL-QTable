@@ -74,8 +74,8 @@ class DQNAgent:
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
 
-    def act(self, state):
-        if np.random.rand() <= self.epsilon:  #
+    def act(self, state, training):
+        if np.random.rand() <= self.epsilon and training:  #
             return random.randrange(self.action_size)
         act_values = self.model.predict(state)  # Takes numpy array as input (or list of np arrays)
         return np.argmax(act_values[0])  # returns action
@@ -87,10 +87,8 @@ class DQNAgent:
             if done:
                 target[0][action] = reward
             else:
-                # a = self.model.predict(next_state)[0]
                 t = self.target_model.predict(next_state)[0]
                 target[0][action] = reward + self.gamma * np.amax(t)
-                # target[0][action] = reward + self.gamma * t[np.argmax(a)]
             self.model.fit(state, target, epochs=1, verbose=0)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -122,18 +120,8 @@ if __name__ == "__main__":
 
     # Divide notification list into 10 equal parts
     k_parts_list = list(split(env.notification_list, K_VALUE))
+
     batch_size = 32
-
-    # env2 = gym.make('CartPole-v1')
-    # env2.reset()
-    # print(env2.step(1))
-
-    # Env2 observe space is Box(4)
-    # Env2 state is [a, b, c, d]
-    # Env2 action space is Discrete(2)
-    # Env2 action is 0 or 1
-
-    # Box won't work for this project's states since "adjacent" category values are unrelated
 
     # For k in 10-fold cross validation
     for k_step in range(0, K_VALUE):
@@ -147,10 +135,6 @@ if __name__ == "__main__":
 
         # Set testing data group
         env.testing_data = k_parts_list[k_step]
-
-        # Create Q-Table
-        qtable = np.zeros((state_size, action_size))
-        # print(qtable)
 
         # Create the hyper parameters
         total_training_episodes = 1  # Was 50000, found 1000 to be good
@@ -170,7 +154,7 @@ if __name__ == "__main__":
             total_reward = 0
             for time in range(max_training_steps):
                 # env.render()
-                action = agent.act(state)
+                action = agent.act(state, env.training)
                 next_state, reward, done, _ = env.step(bool(action))
                 total_reward += reward
                 next_state = get_q_state_encoding(env.info, next_state)
@@ -186,13 +170,31 @@ if __name__ == "__main__":
                 if len(agent.memory) > batch_size:
                     agent.replay(batch_size)
 
-    #
-    #     # ----- Using the Trained Q-Table -----
-    #     env.training = False
-    #
-    #     env.reset()
-    #     rewards = []
-    #
+        # ----- Using the Trained DQN -----
+        env.training = False
+        env.reset()
+        rewards = []
+
+        for e in range(total_test_episodes):
+            state = env.reset()
+            state = get_q_state_encoding(env.info, state)
+            state = np.reshape(state, [1, state_size])
+            print(state)
+            total_reward = 0
+            for time in range(max_training_steps):
+                # env.render()
+                action = agent.act(state, env.training)
+                next_state, reward, done, _ = env.step(bool(action))
+                total_reward += reward
+                next_state = get_q_state_encoding(env.info, next_state)
+                # reward = reward if not done else -10
+                next_state = np.reshape(next_state, [1, state_size])
+                state = next_state
+                if done:
+                    print("episode: {}/{}, total reward: {}, steps: {}, e: {:.2}"
+                          .format(e, total_training_episodes, total_reward, time, agent.epsilon))
+                    break
+
     #     for episode in range(total_test_episodes):
     #         state = env.reset()
     #         done = False
