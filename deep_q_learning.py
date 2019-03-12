@@ -10,6 +10,7 @@ from keras.layers import Dense
 from keras.optimizers import Adam
 from keras import backend as K
 from gym_notif.envs.mobile_notification import MobileNotification
+from ml_metrics import MLMetrics
 
 
 def get_q_state_encoding(possible_values: dict, notif: MobileNotification):
@@ -186,10 +187,12 @@ if __name__ == "__main__":
             print("Testing Episode {}".format(e))
             total_reward = 0
             for step in range(max_testing_steps):
+                metr = MLMetrics()
                 # env.render()
                 action = agent.act(state, env.training)
                 print("Testing phase action: {}".format(action))
                 next_state, reward, done, _ = env.step(bool(action))
+                metr.update(bool(action), not(bool(action) != bool(reward)))
                 total_reward += reward
                 next_state = get_q_state_encoding(env.info, next_state)
                 # reward = reward if not done else -10
@@ -202,6 +205,9 @@ if __name__ == "__main__":
                     # Divide by total number of steps taken to get reward as a percentage
                     rewards.append(total_rewards)  # Division by step can be added to get percentage
                     print("Score", total_rewards)
+                    print("TP {}, TN {}, FP {}, FN {}, Prec {}, Rec {}, F1 {}".format(
+                        metr.true_pos, metr.true_neg, metr.false_pos, metr.false_neg, metr.calc_precision(),
+                        metr.calc_recall(), metr.calc_f1_score()))
                     break
         print("Score over time: {} for k iteration {}".format(sum(rewards) / total_test_episodes, k_step))
         k_fold_average_reward += (sum(rewards) / total_test_episodes)

@@ -1,9 +1,9 @@
 import random
 import gym
 import numpy as np
-import pandas as pd
 import gym_notif  # Requires import even though IDE says it is unused
 from gym_notif.envs.mobile_notification import MobileNotification
+from ml_metrics import MLMetrics
 
 
 def get_q_state_index(possible_values: dict, notif: MobileNotification):
@@ -24,8 +24,6 @@ def split(a, n):
     k, m = divmod(len(a), n)  # Returns quotient and remainder for len(a) / n
     return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))  # Returns a generator
 
-
-# TODO: implement some form of k cross validation ( have k = 10 )
 
 # Cross Validation k value
 K_VALUE = 10
@@ -63,7 +61,7 @@ for k_step in range(0, K_VALUE):
     # print(qtable)
 
     # Create the hyper parameters
-    total_training_episodes = 1000  # Was 50000, found 1000 to be good
+    total_training_episodes = 1000  # Was 50000
     total_test_episodes = 100
     max_training_steps = len(env.training_data)  # Number of notifications per training episode
     max_testing_steps = len(env.testing_data)  # Number of notifications per testing episode
@@ -120,7 +118,7 @@ for k_step in range(0, K_VALUE):
         # Reduce epsilon (to reduce exploration over time)
         epsilon = min_epsilon + (max_epsilon - min_epsilon)*np.exp(-decay_rate*episode)
 
-    print(qtable)
+    # print(qtable)
 
     # ----- Using the Trained Q-Table -----
     env.training = False
@@ -132,23 +130,25 @@ for k_step in range(0, K_VALUE):
         state = env.reset()
         done = False
         total_rewards = 0
-        # print("****************************************************")
+
+        metr = MLMetrics()
         print("EPISODE ", episode)
 
         for step in range(max_testing_steps):
-            # UNCOMMENT IT IF YOU WANT TO SEE OUR AGENT PLAYING
-            # env.render()
+            # env.render
             # Take the action (index) that have the maximum expected future reward given that state
             action = np.argmax(qtable[get_q_state_index(env.info, state), :])
-
             new_state, reward, done, info = env.step(bool(action))
-
+            # Actual action = X-NOR(predicted, reward)
+            metr.update(bool(action), not(bool(action) != bool(reward)))
             total_rewards += reward
             if done:
                 total_rewards = total_rewards/step
                 # Divide by total number of steps taken to get reward as a percentage
                 rewards.append(total_rewards)  # Division by step can be added to get percentage
                 print("Score", total_rewards)
+                print("TP {}, TN {}, FP {}, FN {}, Prec {}, Rec {}, F1 {}".format(
+                    metr.true_pos, metr.true_neg, metr.false_pos, metr.false_neg, metr.calc_precision(), metr.calc_recall(), metr.calc_f1_score()))
                 break
             state = new_state
     print("Score over time: {} for k iteration {}".format(sum(rewards) / total_test_episodes, k_step))
