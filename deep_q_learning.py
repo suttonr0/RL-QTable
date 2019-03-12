@@ -75,8 +75,10 @@ class DQNAgent:
         self.memory.append((state, action, reward, next_state, done))
 
     def act(self, state, training):
-        if np.random.rand() <= self.epsilon and training:  #
+        if (np.random.rand() <= self.epsilon) and training:  #
             return random.randrange(self.action_size)
+        if not training:
+            print(state)
         act_values = self.model.predict(state)  # Takes numpy array as input (or list of np arrays)
         return np.argmax(act_values[0])  # returns action
 
@@ -116,15 +118,17 @@ if __name__ == "__main__":
     state_size = env.observation_space.n
     print("MAIN: State size", state_size)
 
-    agent = DQNAgent(state_size, action_size)
-
-    # Divide notification list into 10 equal parts
+    # Divide notification list into k equal parts
     k_parts_list = list(split(env.notification_list, K_VALUE))
 
     batch_size = 32
 
     # For k in 10-fold cross validation
     for k_step in range(0, K_VALUE):
+        # Create the agent's parameters
+        agent = DQNAgent(state_size, action_size)
+
+        # --- Create testing and training sets ---
         env.training_data = []
         env.testing_data = []
 
@@ -137,7 +141,7 @@ if __name__ == "__main__":
         env.testing_data = k_parts_list[k_step]
 
         # Create the hyper parameters
-        total_training_episodes = 1  # Was 50000, found 1000 to be good
+        total_training_episodes = 10  # Was 50000, found 1000 to be good
         total_test_episodes = 100
         max_training_steps = len(env.training_data)  # Number of notifications per training episode
         max_testing_steps = len(env.testing_data)  # Number of notifications per testing episode
@@ -150,9 +154,8 @@ if __name__ == "__main__":
             state = env.reset()
             state = get_q_state_encoding(env.info, state)
             state = np.reshape(state, [1, state_size])
-            print(state)
             total_reward = 0
-            for time in range(max_training_steps):
+            for step in range(max_training_steps):
                 # env.render()
                 action = agent.act(state, env.training)
                 next_state, reward, done, _ = env.step(bool(action))
@@ -164,26 +167,28 @@ if __name__ == "__main__":
                 state = next_state
                 if done:
                     agent.update_target_model()
-                    print("episode: {}/{}, total reward: {}, steps: {}, e: {:.2}"
-                          .format(e, total_training_episodes, total_reward, time, agent.epsilon))
+                    print("TRAINING: episode: {}/{}, total reward: {}, steps: {}, e: {:.2}"
+                          .format(e, total_training_episodes, total_reward, step, agent.epsilon))
                     break
                 if len(agent.memory) > batch_size:
                     agent.replay(batch_size)
 
-        # ----- Using the Trained DQN -----
+        # ----- Using the Trained DQN (Testing) -----
         env.training = False
         env.reset()
         rewards = []
 
         for e in range(total_test_episodes):
             state = env.reset()
+            done = False
             state = get_q_state_encoding(env.info, state)
             state = np.reshape(state, [1, state_size])
-            print(state)
+            print("Testing Episode {}".format(e))
             total_reward = 0
-            for time in range(max_training_steps):
+            for step in range(max_testing_steps):
                 # env.render()
                 action = agent.act(state, env.training)
+                print("Testing phase action: {}".format(action))
                 next_state, reward, done, _ = env.step(bool(action))
                 total_reward += reward
                 next_state = get_q_state_encoding(env.info, next_state)
@@ -191,35 +196,14 @@ if __name__ == "__main__":
                 next_state = np.reshape(next_state, [1, state_size])
                 state = next_state
                 if done:
-                    print("episode: {}/{}, total reward: {}, steps: {}, e: {:.2}"
-                          .format(e, total_training_episodes, total_reward, time, agent.epsilon))
+                    print("TESTING: episode: {}/{}, total reward: {}, steps: {}, e: {:.2}"
+                          .format(e, total_test_episodes, total_reward, step, agent.epsilon))
+                    total_rewards = total_reward/step
+                    # Divide by total number of steps taken to get reward as a percentage
+                    rewards.append(total_rewards)  # Division by step can be added to get percentage
+                    print("Score", total_rewards)
                     break
-
-    #     for episode in range(total_test_episodes):
-    #         state = env.reset()
-    #         done = False
-    #         total_rewards = 0
-    #         # print("****************************************************")
-    #         print("EPISODE ", episode)
-    #
-    #         for step in range(max_testing_steps):
-    #             # UNCOMMENT IT IF YOU WANT TO SEE OUR AGENT PLAYING
-    #             # env.render()
-    #             # Take the action (index) that have the maximum expected future reward given that state
-    #             action = np.argmax(qtable[get_q_state_index(env.info, state), :])
-    #
-    #             new_state, reward, done, info = env.step(bool(action))
-    #
-    #             total_rewards += reward
-    #             if done:
-    #                 total_rewards = total_rewards/step
-    #                 # Divide by total number of steps taken to get reward as a percentage
-    #                 rewards.append(total_rewards)  # Division by step can be added to get percentage
-    #                 print("Score", total_rewards)
-    #                 break
-    #             state = new_state
-    #     print("Score over time: {} for k iteration {}".format(sum(rewards) / total_test_episodes, k_step))
-    #     k_fold_average_reward += (sum(rewards) / total_test_episodes)
-    # env.close()
-    # print("Final average reward across all {} validations: {}".format(K_VALUE, k_fold_average_reward/K_VALUE))
-    #
+        print("Score over time: {} for k iteration {}".format(sum(rewards) / total_test_episodes, k_step))
+        k_fold_average_reward += (sum(rewards) / total_test_episodes)
+    env.close()
+    print("Final average reward across all {} validations: {}".format(K_VALUE, k_fold_average_reward/K_VALUE))
