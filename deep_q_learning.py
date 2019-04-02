@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import gym_notif  # Requires import even though IDE says it is unused
+from timeit import default_timer
 from collections import deque
 from keras.models import Sequential
 from keras.layers import Dense
@@ -24,7 +25,7 @@ def get_q_state_encoding(possible_values: dict, notif: MobileNotification):
     q_state_index += possible_values["package_states"].index(notif.appPackage) * len(possible_values["category_states"]) * \
         len(possible_values["time_of_day_states"])  # List of package states
     q_state_index += possible_values["category_states"].index(notif.category) * len(possible_values["time_of_day_states"])  # List of package states
-    q_state_index += possible_values["time_of_day_states"].index(notif.postedTimeOfDay) # List of package states
+    q_state_index += possible_values["time_of_day_states"].index(notif.postedTimeOfDay)  # List of package states
     output[q_state_index] = 1
     return output
 
@@ -78,8 +79,8 @@ class DQNAgent:
     def act(self, state, training):
         if (np.random.rand() <= self.epsilon) and training:  #
             return random.randrange(self.action_size)
-        if not training:
-            print(state)
+        # if not training:
+        #    print(state)
         act_values = self.model.predict(state)  # Takes numpy array as input (or list of np arrays)
         return np.argmax(act_values[0])  # returns action
 
@@ -104,6 +105,8 @@ class DQNAgent:
 
 
 if __name__ == "__main__":
+    start_time = default_timer()
+
     # Cross Validation k value
     K_VALUE = 10
     k_fold_average_reward = 0
@@ -124,11 +127,12 @@ if __name__ == "__main__":
 
     batch_size = 32
 
+    end_time = default_timer()
+
+    print("Setup time: {}".format(end_time - start_time))
+
     # For k in 10-fold cross validation
     for k_step in range(0, K_VALUE):
-        # Create the agent's parameters
-        agent = DQNAgent(state_size, action_size)
-
         # --- Create testing and training sets ---
         env.training_data = []
         env.testing_data = []
@@ -140,6 +144,11 @@ if __name__ == "__main__":
 
         # Set testing data group
         env.testing_data = k_parts_list[k_step]
+
+        start_time = default_timer()
+
+        # Create the agent's parameters
+        agent = DQNAgent(state_size, action_size)
 
         # Create the hyper parameters
         total_training_episodes = 10  # Was 50000, found 1000 to be good
@@ -174,10 +183,15 @@ if __name__ == "__main__":
                 if len(agent.memory) > batch_size:
                     agent.replay(batch_size)
 
+        end_time = default_timer()
+
+        print("Training time: {}".format(end_time - start_time))
+
         # ----- Using the Trained DQN (Testing) -----
+        start_time = default_timer()
         env.training = False
         env.reset()
-        rewards = []
+        list_tot_rewards = []
 
         for e in range(total_test_episodes):
             state = env.reset()
@@ -186,30 +200,30 @@ if __name__ == "__main__":
             state = np.reshape(state, [1, state_size])
             print("Testing Episode {}".format(e))
             total_reward = 0
+            metr = MLMetrics()
             for step in range(max_testing_steps):
-                metr = MLMetrics()
                 # env.render()
                 action = agent.act(state, env.training)
-                print("Testing phase action: {}".format(action))
+                # print("Testing phase action: {}".format(action))
                 next_state, reward, done, _ = env.step(bool(action))
-                metr.update(bool(action), not(bool(action) != bool(reward)))
+                metr.update(bool(action), bool(action) == bool(reward))
                 total_reward += reward
                 next_state = get_q_state_encoding(env.info, next_state)
-                # reward = reward if not done else -10
                 next_state = np.reshape(next_state, [1, state_size])
                 state = next_state
                 if done:
                     print("TESTING: episode: {}/{}, total reward: {}, steps: {}, e: {:.2}"
                           .format(e, total_test_episodes, total_reward, step, agent.epsilon))
-                    total_rewards = total_reward/step
-                    # Divide by total number of steps taken to get reward as a percentage
-                    rewards.append(total_rewards)  # Division by step can be added to get percentage
-                    print("Score", total_rewards)
-                    print("TP {}, TN {}, FP {}, FN {}, Prec {}, Rec {}, F1 {}".format(
+                    list_tot_rewards.append(total_reward)
+                    print("TP {}, TN {}, FP {}, FN {}, Prec {}, Rec {}, F1 {}, Acc {}".format(
                         metr.true_pos, metr.true_neg, metr.false_pos, metr.false_neg, metr.calc_precision(),
-                        metr.calc_recall(), metr.calc_f1_score()))
+                        metr.calc_recall(), metr.calc_f1_score(), metr.calc_accuracy()))
+                    print("Click-through Rate {}".format(metr.calc_click_through_rate()))
                     break
-        print("Score over time: {} for k iteration {}".format(sum(rewards) / total_test_episodes, k_step))
-        k_fold_average_reward += (sum(rewards) / total_test_episodes)
+        print("Score over time: {} for k iteration {}".format(sum(list_tot_rewards) / total_test_episodes, k_step))
+        k_fold_average_reward += (sum(list_tot_rewards) / total_test_episodes)
+        end_time = default_timer()
+        print("Testing time: {}".format(end_time - start_time))
+
     env.close()
     print("Final average reward across all {} validations: {}".format(K_VALUE, k_fold_average_reward/K_VALUE))
