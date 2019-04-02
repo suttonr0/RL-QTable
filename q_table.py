@@ -1,10 +1,11 @@
 import random
+import csv
 import gym
 import numpy as np
 import gym_notif  # Requires import even though IDE says it is unused
 from timeit import default_timer
 from gym_notif.envs.mobile_notification import MobileNotification
-from ml_metrics import MLMetrics
+from ml_metrics import MLMetrics, OverallMetrics
 
 
 def get_q_state_index(possible_values: dict, notif: MobileNotification):
@@ -32,6 +33,7 @@ if __name__ == "__main__":
     # Cross Validation k value
     K_VALUE = 10
     k_fold_average_reward = 0
+    k_metrics = []
 
     # Create Environment (ensure this is outside of the cross-validation loop, otherwise the dataset will be randomly
     # shuffled between k values
@@ -70,7 +72,7 @@ if __name__ == "__main__":
         qtable = np.zeros((state_size, action_size))
 
         # Create the hyper parameters
-        total_training_episodes = 1000  # Was 50000
+        total_training_episodes = 250  # Was 50000
         total_test_episodes = 100
         max_training_steps = len(env.training_data)  # Number of notifications per training episode
         max_testing_steps = len(env.testing_data)  # Number of notifications per testing episode
@@ -92,6 +94,7 @@ if __name__ == "__main__":
             # Reset the environment
             state = env.reset()
             done = False
+            total_reward = 0
             # Each step changes the state to another notification
             for step in range(max_training_steps):
                 # Get random number for exploration/exploitation
@@ -107,6 +110,7 @@ if __name__ == "__main__":
 
                 # Take the action (a) and observe the outcome state (s') and reward (r)
                 new_state, reward, done, info = env.step(bool(action))
+                total_reward += reward
 
                 # Update Q(s,a) using the Bellman equation
                 qtable[get_q_state_index(env.info, state), action] = qtable[get_q_state_index(env.info, state), action] + \
@@ -117,6 +121,8 @@ if __name__ == "__main__":
 
                 # If done (i.e. passed through all states in the training set) then finish episode
                 if done:
+                    print("TRAINING: episode: {}/{}, total reward: {}, steps: {}, epsilon: {}"
+                          .format(episode, total_training_episodes, total_reward, step, epsilon))
                     break
 
             episode += 1
@@ -125,7 +131,8 @@ if __name__ == "__main__":
 
         end_time = default_timer()
 
-        print("Training time: {}".format(end_time - start_time))
+        training_time = end_time - start_time
+        print("Training time: {}".format(training_time))
         # print(qtable)
 
         # ----- Using the Trained Q-Table -----
@@ -133,6 +140,7 @@ if __name__ == "__main__":
         env.training = False
         env.reset()
         list_tot_rewards = []
+        metric_list = OverallMetrics()
 
         for episode in range(total_test_episodes):
             state = env.reset()
@@ -149,17 +157,20 @@ if __name__ == "__main__":
                 metr.update(bool(action), not(bool(action) != bool(reward)))
                 total_reward += reward
                 if done:
-                    list_tot_rewards.append(total_reward)
-                    print("TP {}, TN {}, FP {}, FN {}, Prec {}, Rec {}, F1 {}, Acc {}".format(
-                        metr.true_pos, metr.true_neg, metr.false_pos, metr.false_neg, metr.calc_precision(), metr.calc_recall(), metr.calc_f1_score(), metr.calc_accuracy()))
-                    print("Click-through Rate {}".format(metr.calc_click_through_rate()))
+                    metric_list.update(metr)
+                    print(metr)
                     break
                 state = new_state
-        print("Score over time: {} for k iteration {}".format(sum(list_tot_rewards) / total_test_episodes, k_step))
-        k_fold_average_reward += (sum(list_tot_rewards) / total_test_episodes)
 
         end_time = default_timer()
-        print("Testing time: {}".format(end_time - start_time))
-    env.close()
-    print("Final average reward across all {} validations: {}".format(K_VALUE, k_fold_average_reward/K_VALUE))
+        testing_time = end_time - start_time
+        print("Testing time: {}".format(testing_time))
+        print("Average accuracy: {}".format(metric_list.average_accuracy()))
+        k_metrics.append(metric_list.get_average_metrics(k_step) + [training_time, testing_time])
 
+    csv_name = env.CSV_FILE.split('/')[1].split('.')[0]  # Removes directory and file extension from the env's CSV name
+    env.close()
+    writer = csv.writer(open(csv_name + "_QTable.csv", "w"))
+    writer.writerow(["k_value", "Precision", "Accuracy", "Recall", "F1 Score", "Click_Through"])
+    for row in k_metrics:
+        writer.writerow(row)

@@ -1,4 +1,5 @@
 import random
+import csv
 import gym
 import tensorflow as tf
 import numpy as np
@@ -11,7 +12,7 @@ from keras.layers import Dense
 from keras.optimizers import Adam
 from keras import backend as K
 from gym_notif.envs.mobile_notification import MobileNotification
-from ml_metrics import MLMetrics
+from ml_metrics import MLMetrics, OverallMetrics
 
 
 def get_q_state_encoding(possible_values: dict, notif: MobileNotification):
@@ -110,6 +111,7 @@ if __name__ == "__main__":
     # Cross Validation k value
     K_VALUE = 10
     k_fold_average_reward = 0
+    k_metrics = []
 
     # Create Environment (ensure this is outside of the cross-validation loop, otherwise the dataset will be randomly
     # shuffled between k values
@@ -177,7 +179,7 @@ if __name__ == "__main__":
                 state = next_state
                 if done:
                     agent.update_target_model()
-                    print("TRAINING: episode: {}/{}, total reward: {}, steps: {}, e: {:.2}"
+                    print("TRAINING: episode: {}/{}, total reward: {}, steps: {}, epsilon: {:.2}"
                           .format(e, total_training_episodes, total_reward, step, agent.epsilon))
                     break
                 if len(agent.memory) > batch_size:
@@ -192,6 +194,7 @@ if __name__ == "__main__":
         env.training = False
         env.reset()
         list_tot_rewards = []
+        metric_list = OverallMetrics()  # Lists to store all metric values for this k cross-validation iteration
 
         for e in range(total_test_episodes):
             state = env.reset()
@@ -212,18 +215,18 @@ if __name__ == "__main__":
                 next_state = np.reshape(next_state, [1, state_size])
                 state = next_state
                 if done:
+                    metric_list.update(metr)
                     print("TESTING: episode: {}/{}, total reward: {}, steps: {}, e: {:.2}"
                           .format(e, total_test_episodes, total_reward, step, agent.epsilon))
-                    list_tot_rewards.append(total_reward)
-                    print("TP {}, TN {}, FP {}, FN {}, Prec {}, Rec {}, F1 {}, Acc {}".format(
-                        metr.true_pos, metr.true_neg, metr.false_pos, metr.false_neg, metr.calc_precision(),
-                        metr.calc_recall(), metr.calc_f1_score(), metr.calc_accuracy()))
-                    print("Click-through Rate {}".format(metr.calc_click_through_rate()))
+                    print(metr)
                     break
-        print("Score over time: {} for k iteration {}".format(sum(list_tot_rewards) / total_test_episodes, k_step))
-        k_fold_average_reward += (sum(list_tot_rewards) / total_test_episodes)
         end_time = default_timer()
         print("Testing time: {}".format(end_time - start_time))
+        k_metrics.append(metric_list.get_average_metrics(k_step))
 
+    csv_name = env.CSV_FILE.split('/')[1].split('.')[0]  # Removes directory and file extension from the env's CSV name
     env.close()
-    print("Final average reward across all {} validations: {}".format(K_VALUE, k_fold_average_reward/K_VALUE))
+    writer = csv.writer(open(csv_name + "_DQN.csv", "w"))
+    writer.writerow(["k_value", "Precision", "Accuracy", "Recall", "F1 Score", "Click_Through"])
+    for row in k_metrics:
+        writer.writerow(row)
