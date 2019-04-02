@@ -34,6 +34,7 @@ if __name__ == "__main__":
     K_VALUE = 10
     k_fold_average_reward = 0
     k_metrics = []
+    training_metrics = []
 
     # Create Environment (ensure this is outside of the cross-validation loop, otherwise the dataset will be randomly
     # shuffled between k values
@@ -90,6 +91,7 @@ if __name__ == "__main__":
 
         # ----- The Q-Learning Algorithm -----
         print("Training...")
+
         for episode in range(total_training_episodes):
             # Reset the environment
             state = env.reset()
@@ -123,6 +125,8 @@ if __name__ == "__main__":
                 if done:
                     print("TRAINING: episode: {}/{}, total reward: {}, steps: {}, epsilon: {}"
                           .format(episode, total_training_episodes, total_reward, step, epsilon))
+                    if k_step == 0:
+                        training_metrics.append([episode, total_reward/step, epsilon])
                     break
 
             episode += 1
@@ -170,7 +174,19 @@ if __name__ == "__main__":
 
     csv_name = env.CSV_FILE.split('/')[1].split('.')[0]  # Removes directory and file extension from the env's CSV name
     env.close()
-    writer = csv.writer(open(csv_name + "_QTable.csv", "w"))
-    writer.writerow(["k_value", "Precision", "Accuracy", "Recall", "F1 Score", "Click_Through"])
+
+    # ----- Write Average ML metrics for each k-step to csv -----
+    file_1 = open(csv_name + "_QTable.csv", "w", newline='')  # Newline override to prevent blank rows in Windows
+    writer = csv.writer(file_1)
+    writer.writerow(["k_value", "Precision", "Accuracy", "Recall", "F1 Score", "Click_Through", "Train time", "Test time"])
     for row in k_metrics:
         writer.writerow(row)
+    file_1.close()
+
+    # ----- Write reward and epsilon values across episodes to csv -----
+    file_1 = open(csv_name + "_traindata_QTable.csv", "w", newline='')
+    writer = csv.writer(file_1)
+    writer.writerow(["Episode", "Percentage Reward", "Epsilon"])
+    for row in training_metrics:
+        writer.writerow(row)
+    file_1.close()
