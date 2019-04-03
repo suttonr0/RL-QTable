@@ -73,7 +73,7 @@ if __name__ == "__main__":
         qtable = np.zeros((state_size, action_size))
 
         # Create the hyper parameters
-        total_training_episodes = 250  # Was 50000
+        total_training_episodes = 1000  # Was 50000
         total_test_episodes = 100
         max_training_steps = len(env.training_data)  # Number of notifications per training episode
         max_testing_steps = len(env.testing_data)  # Number of notifications per testing episode
@@ -85,7 +85,7 @@ if __name__ == "__main__":
         epsilon = 1.0  # Exploration rate
         max_epsilon = 1.0  # Exploration probability at the start
         min_epsilon = 0.01  # Min exploration probability
-        decay_rate = 0.01  # Exponential decay rate for exploration, was 0.01
+        decay_rate = 0.005  # Exponential decay rate for exploration, was 0.01
 
         env.training = True
 
@@ -123,8 +123,8 @@ if __name__ == "__main__":
 
                 # If done (i.e. passed through all states in the training set) then finish episode
                 if done:
-                    print("TRAINING: episode: {}/{}, total reward: {}, steps: {}, epsilon: {}"
-                          .format(episode, total_training_episodes, total_reward, step, epsilon))
+                    print("TRAINING: k:{}, episode: {}/{}, total reward: {}, steps: {}, epsilon: {}"
+                          .format(k_step, episode, total_training_episodes, total_reward, step, epsilon))
                     if k_step == 0:
                         training_metrics.append([episode, total_reward/step, epsilon])
                     break
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     env.close()
 
     # ----- Write Average ML metrics for each k-step to csv -----
-    file_1 = open(csv_name + "_QTable.csv", "w", newline='')  # Newline override to prevent blank rows in Windows
+    file_1 = open("csv_output/" + csv_name + "_QTable.csv", "w", newline='')  # Newline override to prevent blank rows in Windows
     writer = csv.writer(file_1)
     writer.writerow(["k_value", "Precision", "Accuracy", "Recall", "F1 Score", "Click_Through", "Train time", "Test time"])
     for row in k_metrics:
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     file_1.close()
 
     # ----- Write reward and epsilon values across episodes to csv -----
-    file_1 = open(csv_name + "_traindata_QTable.csv", "w", newline='')
+    file_1 = open("csv_output/" + csv_name + "_k0traindata_QTable.csv", "w", newline='')
     writer = csv.writer(file_1)
     writer.writerow(["Episode", "Percentage Reward", "Epsilon"])
     for row in training_metrics:

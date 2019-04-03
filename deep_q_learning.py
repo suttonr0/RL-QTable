@@ -11,6 +11,7 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras import backend as K
+from tensorflow.python.client import device_lib
 from gym_notif.envs.mobile_notification import MobileNotification
 from ml_metrics import MLMetrics, OverallMetrics
 
@@ -41,7 +42,8 @@ class DQNAgent:
     def __init__(self, state_size, action_size):
         self.state_size = state_size
         self.action_size = action_size
-        self.memory = deque(maxlen=2000)  # Replay queue
+        # Replay queue, was 2000. Maxlen corresponds to max number of previous notifications system can retrain on
+        self.memory = deque(maxlen=200)
         self.gamma = 0.95  # Discount rate
         self.epsilon = 1.0  # exploration rate
         self.epsilon_min = 0.01
@@ -63,8 +65,8 @@ class DQNAgent:
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         model = Sequential()
-        model.add(Dense(24, input_dim=self.state_size, activation='relu'))  # Input Layer
-        model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, input_dim=self.state_size, activation='relu'))  # Input Layer, was 24 nodes
+        model.add(Dense(24, activation='relu'))  # Hidden Layer, was 24 nodes
         model.add(Dense(self.action_size, activation='linear'))  # Linear activation for output
         model.compile(loss=self._huber_loss,
                       optimizer=Adam(lr=self.learning_rate))
@@ -80,8 +82,6 @@ class DQNAgent:
     def act(self, state, training):
         if (np.random.rand() <= self.epsilon) and training:  #
             return random.randrange(self.action_size)
-        # if not training:
-        #    print(state)
         act_values = self.model.predict(state)  # Takes numpy array as input (or list of np arrays)
         return np.argmax(act_values[0])  # returns action
 
@@ -112,6 +112,7 @@ if __name__ == "__main__":
     K_VALUE = 10
     k_fold_average_reward = 0
     k_metrics = []
+    training_metrics = []
 
     # Create Environment (ensure this is outside of the cross-validation loop, otherwise the dataset will be randomly
     # shuffled between k values
@@ -127,7 +128,7 @@ if __name__ == "__main__":
     # Divide notification list into k equal parts
     k_parts_list = list(split(env.notification_list, K_VALUE))
 
-    batch_size = 32
+    batch_size = 2  # Was 32. !! This is the largest contributor to slow training speed !!
 
     end_time = default_timer()
 
@@ -162,6 +163,8 @@ if __name__ == "__main__":
 
         state = env.reset()
 
+        print("Training...")
+
         for e in range(total_training_episodes):
             state = env.reset()
             state = get_q_state_encoding(env.info, state)
@@ -178,15 +181,17 @@ if __name__ == "__main__":
                 agent.remember(state, action, reward, next_state, done)
                 state = next_state
                 if done:
+                    print("TRAINING: k:{}, episode: {}/{}, total reward: {}, steps: {}, epsilon: {:.2}"
+                          .format(k_step, e, total_training_episodes, total_reward, step, agent.epsilon))
+                    if k_step == 0:
+                        training_metrics.append([e, total_reward / step, agent.epsilon])
                     agent.update_target_model()
-                    print("TRAINING: episode: {}/{}, total reward: {}, steps: {}, epsilon: {:.2}"
-                          .format(e, total_training_episodes, total_reward, step, agent.epsilon))
                     break
                 if len(agent.memory) > batch_size:
                     agent.replay(batch_size)
 
         end_time = default_timer()
-
+        training_time = end_time - start_time
         print("Training time: {}".format(end_time - start_time))
 
         # ----- Using the Trained DQN (Testing) -----
@@ -221,12 +226,26 @@ if __name__ == "__main__":
                     print(metr)
                     break
         end_time = default_timer()
+        testing_time = end_time - start_time
         print("Testing time: {}".format(end_time - start_time))
-        k_metrics.append(metric_list.get_average_metrics(k_step))
+        k_metrics.append(metric_list.get_average_metrics(k_step) + [training_time, testing_time])
 
     csv_name = env.CSV_FILE.split('/')[1].split('.')[0]  # Removes directory and file extension from the env's CSV name
     env.close()
-    writer = csv.writer(open(csv_name + "_DQN.csv", "w"))
-    writer.writerow(["k_value", "Precision", "Accuracy", "Recall", "F1 Score", "Click_Through"])
+
+    # ----- Write Average ML metrics for each k-step to csv -----
+    file_1 = open("csv_output/" + csv_name + "_DQN.csv", "w", newline='')  # Newline override to prevent blank rows in Windows
+    writer = csv.writer(file_1)
+    writer.writerow(
+        ["k_value", "Precision", "Accuracy", "Recall", "F1 Score", "Click_Through", "Train time", "Test time"])
     for row in k_metrics:
         writer.writerow(row)
+    file_1.close()
+
+    # ----- Write reward and epsilon values across episodes to csv -----
+    file_1 = open("csv_output/" + csv_name + "_k0traindata_DQN.csv", "w", newline='')
+    writer = csv.writer(file_1)
+    writer.writerow(["Episode", "Percentage Reward", "Epsilon"])
+    for row in training_metrics:
+        writer.writerow(row)
+    file_1.close()
