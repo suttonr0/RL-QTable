@@ -3,7 +3,6 @@ import csv
 import gym
 import tensorflow as tf
 import numpy as np
-import pandas as pd
 import gym_notif  # Requires import even though IDE says it is unused
 from timeit import default_timer
 from collections import deque
@@ -11,23 +10,27 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras import backend as K
-from tensorflow.python.client import device_lib
 from gym_notif.envs.mobile_notification import MobileNotification
 from ml_metrics import MLMetrics, OverallMetrics
 
 
-def get_q_state_encoding(possible_values: dict, notif: MobileNotification):
+def get_q_state_encoding(states: dict, notif: MobileNotification, num_features: int):
     # inputs
     # possible_values: dict values are a list of all possible values for their key category
     # (e.g. possible_states["time_of_day_states"] = ["morn", "afternoon", "evening"]
 
     # Q-State-Index is calculated of the combination of the indices of the three features in their possible value list
-    output = np.zeros(possible_values["total_number_of_states"])
+    output = np.zeros(states["total_number_of_states"])
     q_state_index = 0
-    q_state_index += possible_values["package_states"].index(notif.appPackage) * len(possible_values["category_states"]) * \
-        len(possible_values["time_of_day_states"])  # List of package states
-    q_state_index += possible_values["category_states"].index(notif.category) * len(possible_values["time_of_day_states"])  # List of package states
-    q_state_index += possible_values["time_of_day_states"].index(notif.postedTimeOfDay)  # List of package states
+    if num_features >= 4:
+        q_state_index += states["day_of_week_states"].index(notif.postedTimeOfDay) * len(states["time_of_day_states"]) * \
+                         len(states["category_states"]) * len(states["package_states"])
+    if num_features >= 3:
+        q_state_index += states["time_of_day_states"].index(notif.postedTimeOfDay) * \
+                         len(states["category_states"]) * len(states["package_states"])  # List of package states
+    if num_features >= 2:
+        q_state_index += states["category_states"].index(notif.category) * len(states["package_states"])
+    q_state_index += states["package_states"].index(notif.appPackage)  # List of package states
     output[q_state_index] = 1
     return output
 
@@ -119,6 +122,9 @@ if __name__ == "__main__":
     env = gym.make('notif-v0')
     env.render()
 
+    num_features = env.feat_number
+    print("MAIN: NUMBER OF FEATURES ", num_features)
+
     action_size = env.action_space.n
     print("MAIN: Action size ", action_size)
 
@@ -167,7 +173,7 @@ if __name__ == "__main__":
 
         for e in range(total_training_episodes):
             state = env.reset()
-            state = get_q_state_encoding(env.info, state)
+            state = get_q_state_encoding(env.info, state, num_features)
             state = np.reshape(state, [1, state_size])
             total_reward = 0
             for step in range(max_training_steps):
@@ -175,7 +181,7 @@ if __name__ == "__main__":
                 action = agent.act(state, env.training)
                 next_state, reward, done, _ = env.step(bool(action))
                 total_reward += reward
-                next_state = get_q_state_encoding(env.info, next_state)
+                next_state = get_q_state_encoding(env.info, next_state, num_features)
                 # reward = reward if not done else -10
                 next_state = np.reshape(next_state, [1, state_size])
                 agent.remember(state, action, reward, next_state, done)
@@ -204,7 +210,7 @@ if __name__ == "__main__":
         for e in range(total_test_episodes):
             state = env.reset()
             done = False
-            state = get_q_state_encoding(env.info, state)
+            state = get_q_state_encoding(env.info, state, num_features)
             state = np.reshape(state, [1, state_size])
             print("Testing Episode {}".format(e))
             total_reward = 0
@@ -216,7 +222,7 @@ if __name__ == "__main__":
                 next_state, reward, done, _ = env.step(bool(action))
                 metr.update(bool(action), bool(action) == bool(reward))
                 total_reward += reward
-                next_state = get_q_state_encoding(env.info, next_state)
+                next_state = get_q_state_encoding(env.info, next_state, num_features)
                 next_state = np.reshape(next_state, [1, state_size])
                 state = next_state
                 if done:
@@ -234,7 +240,7 @@ if __name__ == "__main__":
     env.close()
 
     # ----- Write Average ML metrics for each k-step to csv -----
-    file_1 = open("csv_output/" + csv_name + "_DQN.csv", "w", newline='')  # Newline override to prevent blank rows in Windows
+    file_1 = open("csv_output/feat{}_DQN.csv".format(num_features), "w", newline='')  # Newline override to prevent blank rows in Windows
     writer = csv.writer(file_1)
     writer.writerow(
         ["k_value", "Precision", "Accuracy", "Recall", "F1 Score", "Click_Through", "Train time", "Test time"])
@@ -243,7 +249,7 @@ if __name__ == "__main__":
     file_1.close()
 
     # ----- Write reward and epsilon values across episodes to csv -----
-    file_1 = open("csv_output/" + csv_name + "_k0traindata_DQN.csv", "w", newline='')
+    file_1 = open("csv_output/feat{}_k0traindata_DQN.csv".format(num_features), "w", newline='')
     writer = csv.writer(file_1)
     writer.writerow(["Episode", "Percentage Reward", "Epsilon"])
     for row in training_metrics:

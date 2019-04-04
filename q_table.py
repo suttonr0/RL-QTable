@@ -8,17 +8,22 @@ from gym_notif.envs.mobile_notification import MobileNotification
 from ml_metrics import MLMetrics, OverallMetrics
 
 
-def get_q_state_index(possible_values: dict, notif: MobileNotification):
+def get_q_state_index(states: dict, notif: MobileNotification, num_features: int):
     # inputs
-    # possible_values: dict values are a list of all possible values for their key category
-    # (e.g. possible_states["time_of_day_states"] = ["morn", "afternoon", "evening"]
+    # states: dict values are a list of all possible values for their key category
+    # (e.g. states["time_of_day_states"] = ["morn", "afternoon", "evening"]
 
-    # Q-State-Index is calculated of the combination of the indices of the three features in their possible value list
+    # Q-State-Index is calculated of the combination of the indices of the features in their possible value list
     q_state_index = 0
-    q_state_index += possible_values["package_states"].index(notif.appPackage) * len(possible_values["category_states"]) * \
-        len(possible_values["time_of_day_states"])  # List of package states
-    q_state_index += possible_values["category_states"].index(notif.category) * len(possible_values["time_of_day_states"])  # List of package states
-    q_state_index += possible_values["time_of_day_states"].index(notif.postedTimeOfDay)  # List of package states
+    if num_features >= 4:
+        q_state_index += states["day_of_week_states"].index(notif.postedDayOfWeek) * len(states["time_of_day_states"]) * \
+                         len(states["category_states"]) * len(states["package_states"])
+    if num_features >= 3:
+        q_state_index += states["time_of_day_states"].index(notif.postedTimeOfDay) * \
+                         len(states["category_states"]) * len(states["package_states"])  # List of package states
+    if num_features >= 2:
+        q_state_index += states["category_states"].index(notif.category) * len(states["package_states"])
+    q_state_index += states["package_states"].index(notif.appPackage)  # List of package states
     return q_state_index
 
 
@@ -40,6 +45,9 @@ if __name__ == "__main__":
     # shuffled between k values
     env = gym.make('notif-v0')
     env.render()
+
+    num_features = env.feat_number
+    print("MAIN: NUMBER OF FEATURES ", num_features)
 
     action_size = env.action_space.n
     print("MAIN: Action size ", action_size)
@@ -104,7 +112,7 @@ if __name__ == "__main__":
 
                 # If this random number > epsilon --> exploitation (take largest Q value from the Q-table)
                 if exp_exp_tradeoff > epsilon:
-                    action = np.argmax(qtable[get_q_state_index(env.info, state), :])
+                    action = np.argmax(qtable[get_q_state_index(env.info, state, num_features), :])
 
                 # Else do a random choice --> exploration
                 else:
@@ -115,8 +123,8 @@ if __name__ == "__main__":
                 total_reward += reward
 
                 # Update Q(s,a) using the Bellman equation
-                qtable[get_q_state_index(env.info, state), action] = qtable[get_q_state_index(env.info, state), action] + \
-                    learning_rate * (reward + gamma * np.max(qtable[get_q_state_index(env.info, new_state), :]) - qtable[get_q_state_index(env.info, state), action])
+                qtable[get_q_state_index(env.info, state, num_features), action] = qtable[get_q_state_index(env.info, state, num_features), action] + \
+                    learning_rate * (reward + gamma * np.max(qtable[get_q_state_index(env.info, new_state, num_features), :]) - qtable[get_q_state_index(env.info, state, num_features), action])
 
                 # Update to the new state
                 state = new_state
@@ -155,7 +163,7 @@ if __name__ == "__main__":
             for step in range(max_testing_steps):
                 # env.render
                 # Take the action (index) that have the maximum expected future reward given that state
-                action = np.argmax(qtable[get_q_state_index(env.info, state), :])
+                action = np.argmax(qtable[get_q_state_index(env.info, state, num_features), :])
                 new_state, reward, done, info = env.step(bool(action))
                 # Actual action equals X-NOR(predicted, reward)
                 metr.update(bool(action), not(bool(action) != bool(reward)))
@@ -176,7 +184,7 @@ if __name__ == "__main__":
     env.close()
 
     # ----- Write Average ML metrics for each k-step to csv -----
-    file_1 = open("csv_output/" + csv_name + "_QTable.csv", "w", newline='')  # Newline override to prevent blank rows in Windows
+    file_1 = open("csv_output/feat{}_QTable.csv".format(num_features), "w", newline='')  # Newline override to prevent blank rows in Windows
     writer = csv.writer(file_1)
     writer.writerow(["k_value", "Precision", "Accuracy", "Recall", "F1 Score", "Click_Through", "Train time", "Test time"])
     for row in k_metrics:
@@ -184,7 +192,7 @@ if __name__ == "__main__":
     file_1.close()
 
     # ----- Write reward and epsilon values across episodes to csv -----
-    file_1 = open("csv_output/" + csv_name + "_k0traindata_QTable.csv", "w", newline='')
+    file_1 = open("csv_output/feat{}_k0traindata_QTable.csv".format(num_features), "w", newline='')
     writer = csv.writer(file_1)
     writer.writerow(["Episode", "Percentage Reward", "Epsilon"])
     for row in training_metrics:
