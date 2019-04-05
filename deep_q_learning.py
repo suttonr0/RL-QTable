@@ -23,7 +23,7 @@ def get_q_state_encoding(states: dict, notif: MobileNotification, num_features: 
     output = np.zeros(states["total_number_of_states"])
     q_state_index = 0
     if num_features >= 4:
-        q_state_index += states["day_of_week_states"].index(notif.postedTimeOfDay) * len(states["time_of_day_states"]) * \
+        q_state_index += states["day_of_week_states"].index(notif.postedDayOfWeek) * len(states["time_of_day_states"]) * \
                          len(states["category_states"]) * len(states["package_states"])
     if num_features >= 3:
         q_state_index += states["time_of_day_states"].index(notif.postedTimeOfDay) * \
