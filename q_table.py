@@ -169,7 +169,7 @@ if __name__ == "__main__":
         end_time = default_timer()
         testing_time = end_time - start_time
         print("Testing time: {}".format(testing_time))
-        print("Average accuracy: {}".format(metric_list.average_accuracy()))
+        print("Average accuracy: {}".format(metric_list.average_list(metric_list.accuracy_list)))
         k_metrics.append(metric_list.get_average_metrics(k_step) + [training_time, testing_time])
 
     csv_name = env.CSV_FILE.split('/')[1].split('.')[0]  # Removes directory and file extension from the env's CSV name

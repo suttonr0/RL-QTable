@@ -80,25 +80,17 @@ class OverallMetrics:
     def get_average_metrics(self, k_value):
         row = list()
         row.append(k_value)
-        row.append(self.average_precision())
-        row.append(self.average_accuracy())
-        row.append(self.average_recall())
-        row.append(self.average_f1_score())
-        row.append(self.average_click_through())
+        row.append(self.average_list(self.precision_list))
+        row.append(self.average_list(self.accuracy_list))
+        row.append(self.average_list(self.recall_list))
+        row.append(self.average_list(self.f1_list))
+        row.append(self.average_list(self.click_list))
         return row
 
-    def average_precision(self):
-        return sum(self.precision_list)/len(self.precision_list)
-
-    def average_accuracy(self):
-        return sum(self.accuracy_list)/len(self.accuracy_list)
-
-    def average_recall(self):
-        return sum(self.recall_list)/len(self.recall_list)
-
-    def average_f1_score(self):
-        return sum(self.f1_list)/len(self.f1_list)
-
-    def average_click_through(self):
-        return sum(self.click_list)/len(self.click_list)
+    def average_list(self, input_list):
+        numerator = 0
+        for i in input_list:
+            if i >= 0:
+                numerator += i
+        return numerator / len(input_list)
 
